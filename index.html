@@ -15,6 +15,7 @@
             --accent-cyan: #0088ff;
             --accent-orange: #ff6a00;
             --accent-red: #ff004c;
+            --accent-green: #2ecc71;
             --text-main: #2c3e50;
         }
 
@@ -61,16 +62,20 @@
         .vote-btn {
             width: 100%; background: white; border: 1px solid var(--accent-cyan);
             color: var(--accent-cyan); padding: 10px; margin-top: 8px;
-            border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s;
+            border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.3s;
         }
-        .vote-btn:hover { background: #f0f7ff; }
+        .vote-btn.photo-success {
+            background: var(--accent-green) !important;
+            color: white !important;
+            border-color: var(--accent-green) !important;
+        }
 
         @keyframes pulse-red { 0% { r: 8; stroke-opacity: 0.8; } 100% { r: 20; stroke-opacity: 0; } }
         .critical-pit { animation: pulse-red 1.2s infinite; }
         .adding-mode { cursor: crosshair !important; }
     </style>
 </head>
-<body class="">
+<body>
 
     <header>
         <div class="logo">ROAD.SCAN</div>
@@ -102,7 +107,6 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // Ініціалізація блідої карти
         const map = L.map('map', { zoomControl: false }).setView([48.4647, 35.0462], 13);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; OpenStreetMap'
@@ -116,19 +120,45 @@
 
         window.toggleAddMode = () => {
             const isAdd = document.body.classList.toggle('adding-mode');
-            document.getElementById('addBtn').innerText = isAdd ? "Скасувати" : "+ Повідомити про яму";
-            document.getElementById('addBtn').style.background = isAdd ? "#e74c3c" : "#0088ff";
+            const btn = document.getElementById('addBtn');
+            btn.innerText = isAdd ? "Скасувати" : "+ Повідомити про яму";
+            btn.style.background = isAdd ? "#e74c3c" : "#0088ff";
             if(isAdd) showToast("Оберіть місце ями на карті");
         };
 
-        const toBase64 = file => new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = error => reject(error);
-        });
+        // Функція стиснення фото (макс 800px, 0.7 quality)
+        const processImage = (file) => {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let width = img.width;
+                        let height = img.height;
+                        const MAX = 800;
+                        if (width > MAX) { height *= MAX / width; width = MAX; }
+                        canvas.width = width; canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.7));
+                    };
+                };
+            });
+        };
 
-        // Створення нової ями
+        // Функція візуального підтвердження вибору фото
+        window.handlePhotoSelect = (input, btnId) => {
+            if (input.files && input.files[0]) {
+                const btn = document.getElementById(btnId);
+                btn.innerText = "✅ Фото додано";
+                btn.classList.add('photo-success');
+                if (navigator.vibrate) navigator.vibrate(50); // Легка вібрація
+            }
+        };
+
         map.on('click', async (e) => {
             if (!document.body.classList.contains('adding-mode')) return;
             const { lat, lng } = e.latlng;
@@ -136,8 +166,8 @@
             const popupCont = `
                 <div class="pit-card">
                     <h4>НОВА ЯМА</h4>
-                    <input type="file" id="fileInp" accept="image/*" style="display:none">
-                    <button class="vote-btn" onclick="document.getElementById('fileInp').click()">📷 Додати фото (опційно)</button>
+                    <input type="file" id="fileInp" accept="image/*" style="display:none" onchange="handlePhotoSelect(this, 'photoBtnNew')">
+                    <button class="vote-btn" id="photoBtnNew" onclick="document.getElementById('fileInp').click()">📷 Додати фото (опційно)</button>
                     <button class="vote-btn" style="background:#0088ff; color:white;" onclick="processAndSave(${lat}, ${lng})">Створити мітку</button>
                 </div>
             `;
@@ -149,12 +179,12 @@
             const file = document.getElementById('fileInp').files[0];
             let photoData = "https://via.placeholder.com/300x150?text=Немає+фото";
 
-            if (file) {
-                showToast("Стиснення фото...");
-                photoData = await toBase64(file);
-            }
-
             try {
+                if (file) {
+                    showToast("Оптимізація фото...");
+                    photoData = await processImage(file);
+                }
+
                 const ipRes = await fetch('https://api.ipify.org?format=json');
                 const { ip } = await ipRes.json();
 
@@ -167,35 +197,38 @@
                 showToast("Яму успішно занесено в базу!");
                 map.closePopup();
             } catch (err) {
-                showToast("Помилка! Перевірте правила Firestore.");
+                console.error(err);
+                showToast("Помилка запису! Перевірте ліміти Firestore.");
             }
         };
 
-        // Голосування + Оновлення фото
         window.voteForPit = async (id) => {
             const fileInp = document.getElementById(`updatePhoto_${id}`);
             const file = fileInp.files[0];
             
             try {
+                showToast("Завантаження...");
                 const ipRes = await fetch('https://api.ipify.org?format=json');
                 const { ip } = await ipRes.json();
                 const docRef = doc(db, "potholes", id);
                 const docSnap = await getDoc(docRef);
                 const data = docSnap.data();
 
-                if (data.voted_ips.includes(ip)) return showToast("Ви вже підтверджували цю яму");
+                if (data.voted_ips.includes(ip)) return showToast("Ви вже голосували");
 
                 let updateData = { votes: increment(1), voted_ips: arrayUnion(ip) };
-                if (file) updateData.photo = await toBase64(file);
+                if (file) {
+                    showToast("Оновлення фото...");
+                    updateData.photo = await processImage(file);
+                }
 
                 await updateDoc(docRef, updateData);
-                showToast(file ? "Фото оновлено! Дякуємо." : "Голос враховано!");
+                showToast(file ? "Фото оновлено!" : "Голос враховано!");
             } catch (err) {
-                showToast("Помилка при голосуванні");
+                showToast("Помилка Firestore");
             }
         };
 
-        // Малювання маркерів (оновлення в реальному часі)
         const activeMarkers = {};
 
         onSnapshot(collection(db, "potholes"), (snap) => {
@@ -220,8 +253,8 @@
                             <img src="${data.photo}">
                             <h4 style="color:${color}">${isCrit ? 'КРИТИЧНА ЯМА' : 'АКТИВНА ЯМА'}</h4>
                             <p>Підтверджень: ${data.votes}</p>
-                            <input type="file" id="updatePhoto_${id}" accept="image/*" style="display:none">
-                            <button class="vote-btn" onclick="document.getElementById('updatePhoto_${id}').click()">📷 Змінити фото</button>
+                            <input type="file" id="updatePhoto_${id}" accept="image/*" style="display:none" onchange="handlePhotoSelect(this, 'photoBtn_${id}')">
+                            <button class="vote-btn" id="photoBtn_${id}" onclick="document.getElementById('updatePhoto_${id}').click()">📷 Змінити фото</button>
                             <button class="vote-btn" style="background:${color}; color:white;" onclick="voteForPit('${id}')">ЦЕ ПРАВДА</button>
                         </div>
                     `);
