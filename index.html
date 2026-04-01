@@ -192,7 +192,8 @@
                     lat, lng,
                     photo: photoData,
                     votes: 1,
-                    voted_ips: [ip]
+                    voted_ips: [ip],
+                    createdAt: serverTimestamp()
                 });
                 showToast("Яму успішно занесено в базу!");
                 map.closePopup();
