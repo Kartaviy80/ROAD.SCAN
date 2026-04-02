@@ -93,7 +93,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, updateDoc, doc, arrayUnion, increment, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, updateDoc, doc, increment, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyC6eAjnQsDrho7wAoKXgjSXVjHi_bjFiog",
@@ -126,7 +126,6 @@
             if(isAdd) showToast("Оберіть місце ями на карті");
         };
 
-        // Функція стиснення фото (макс 800px, 0.7 quality)
         const processImage = (file) => {
             return new Promise((resolve) => {
                 const reader = new FileReader();
@@ -149,13 +148,12 @@
             });
         };
 
-        // Функція візуального підтвердження вибору фото
         window.handlePhotoSelect = (input, btnId) => {
             if (input.files && input.files[0]) {
                 const btn = document.getElementById(btnId);
                 btn.innerText = "✅ Фото додано";
                 btn.classList.add('photo-success');
-                if (navigator.vibrate) navigator.vibrate(50); // Легка вібрація
+                if (navigator.vibrate) navigator.vibrate(50);
             }
         };
 
@@ -185,21 +183,21 @@
                     photoData = await processImage(file);
                 }
 
-                const ipRes = await fetch('https://api.ipify.org?format=json');
-                const { ip } = await ipRes.json();
-
-                await addDoc(collection(db, "potholes"), {
+                const docRef = await addDoc(collection(db, "potholes"), {
                     lat, lng,
                     photo: photoData,
                     votes: 1,
-                    voted_ips: [ip],
                     createdAt: serverTimestamp()
                 });
+
+                // Відмічаємо в браузері, що юзер створив цю мітку (авто-голос)
+                localStorage.setItem(`voted_${docRef.id}`, "true");
+
                 showToast("Яму успішно занесено в базу!");
                 map.closePopup();
             } catch (err) {
                 console.error(err);
-                showToast("Помилка запису! Перевірте ліміти Firestore.");
+                showToast("Помилка запису! Перевірте консоль.");
             }
         };
 
@@ -207,25 +205,32 @@
             const fileInp = document.getElementById(`updatePhoto_${id}`);
             const file = fileInp.files[0];
             
+            // Перевірка через LocalStorage замість IP
+            if (localStorage.getItem(`voted_${id}`)) {
+                return showToast("Ви вже підтримали цю мітку");
+            }
+
             try {
-                showToast("Завантаження...");
-                const ipRes = await fetch('https://api.ipify.org?format=json');
-                const { ip } = await ipRes.json();
+                showToast("Опрацювання...");
                 const docRef = doc(db, "potholes", id);
-                const docSnap = await getDoc(docRef);
-                const data = docSnap.data();
+                
+                let updateData = { 
+                    votes: increment(1) 
+                };
 
-                if (data.voted_ips.includes(ip)) return showToast("Ви вже голосували");
-
-                let updateData = { votes: increment(1), voted_ips: arrayUnion(ip) };
                 if (file) {
                     showToast("Оновлення фото...");
                     updateData.photo = await processImage(file);
                 }
 
                 await updateDoc(docRef, updateData);
+                
+                // Зберігаємо голос локально
+                localStorage.setItem(`voted_${id}`, "true");
+                
                 showToast(file ? "Фото оновлено!" : "Голос враховано!");
             } catch (err) {
+                console.error(err);
                 showToast("Помилка Firestore");
             }
         };
