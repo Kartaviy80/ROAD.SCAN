@@ -39,7 +39,7 @@
         h1 { font-family: 'Orbitron', sans-serif; color: var(--accent); font-size: 1.5rem; text-transform: uppercase; letter-spacing: 2px; }
 
         .table-wrapper { background: var(--card-bg); border-radius: 20px; overflow-x: auto; border: 1px solid rgba(255,255,255,0.05); }
-        table { width: 100%; border-collapse: collapse; text-align: left; min-width: 1200px; }
+        table { width: 100%; border-collapse: collapse; text-align: left; min-width: 1300px; }
         th { background: rgba(255,255,255,0.03); padding: 20px; color: #64748b; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }
         td { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: middle; }
 
@@ -58,7 +58,7 @@
 
         .before-after-container {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             align-items: center;
             flex-wrap: wrap;
         }
@@ -70,31 +70,40 @@
             cursor: pointer;
         }
         .upload-btn {
-            background: var(--warning);
-            color: white;
-            border: none;
+            background: rgba(46, 204, 113, 0.2);
+            color: #2ecc71;
+            border: 1px solid rgba(46, 204, 113, 0.4);
             padding: 6px 12px;
             border-radius: 6px;
             cursor: pointer;
             font-size: 0.7rem;
             transition: 0.2s;
         }
-        .upload-btn:hover { opacity: 0.8; }
+        .upload-btn:hover { 
+            background: rgba(46, 204, 113, 0.4);
+            border-color: #2ecc71;
+        }
         .delete-after-btn {
-            background: var(--danger);
-            color: white;
-            border: none;
+            background: rgba(255, 0, 76, 0.2);
+            color: #ff6b6b;
+            border: 1px solid rgba(255, 0, 76, 0.4);
             padding: 4px 8px;
             border-radius: 4px;
             cursor: pointer;
             font-size: 0.6rem;
+            transition: 0.2s;
         }
-        .after-badge {
-            background: var(--success);
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 0.7rem;
-            font-weight: bold;
+        .delete-after-btn:hover {
+            background: rgba(255, 0, 76, 0.4);
+        }
+
+        /* Чекбокс виконано */
+        .completed-checkbox {
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            accent-color: #2ecc71;
+            transform: scale(1.2);
         }
 
         .btn-map { background: var(--success); color: white; padding: 8px 16px; border-radius: 8px; text-decoration: none; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px; }
@@ -191,11 +200,11 @@
 
         .loading-spinner {
             display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,.3);
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(46,204,113,.3);
             border-radius: 50%;
-            border-top-color: white;
+            border-top-color: #2ecc71;
             animation: spin 1s ease-in-out infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -243,6 +252,7 @@
                             <th>Коментар</th>
                             <th>Голоси</th>
                             <th>Фото (Після)</th>
+                            <th>✅ Виконано</th>
                             <th>Керування</th>
                         </tr>
                     </thead>
@@ -292,7 +302,6 @@
 
         const allowedEmails = ["andrey2003kornev@gmail.com"];
 
-        // Функція оптимізації фото (зменшення розміру)
         const processImage = (file) => {
             return new Promise((resolve) => {
                 const reader = new FileReader();
@@ -339,7 +348,6 @@
             document.getElementById('compareModal').style.display = 'none';
         };
 
-        // Завантаження фото "після" як base64 в Firestore
         window.uploadAfterPhoto = async (pitId, fileInput) => {
             const file = fileInput.files[0];
             if (!file) return;
@@ -348,7 +356,7 @@
 
             const btn = document.getElementById(`uploadBtn_${pitId}`);
             const originalText = btn.innerHTML;
-            btn.innerHTML = '<span class="loading-spinner"></span> Завантаження...';
+            btn.innerHTML = '<span class="loading-spinner"></span>';
             btn.disabled = true;
 
             try {
@@ -373,7 +381,6 @@
             }
         };
 
-        // Видалення фото "після"
         window.deleteAfterPhoto = async (pitId) => {
             if (!confirm('Видалити фото виконаних робіт?')) return;
             
@@ -390,28 +397,45 @@
             }
         };
 
-        window.showToast = (msg) => {
-            const container = document.getElementById('notification-container');
-            if (!container) {
-                const div = document.createElement('div');
-                div.id = 'notification-container';
-                div.style.position = 'fixed';
-                div.style.bottom = '20px';
-                div.style.left = '50%';
-                div.style.transform = 'translateX(-50%)';
-                div.style.zIndex = '9999';
-                document.body.appendChild(div);
+        window.toggleCompleted = async (pitId, isChecked) => {
+            try {
+                const pitRef = doc(db, "potholes", pitId);
+                await updateDoc(pitRef, {
+                    manuallyCompleted: isChecked
+                });
+                showToast(isChecked ? "Позначено як виконано" : "Позначку виконано знято");
+            } catch (error) {
+                console.error('Помилка оновлення:', error);
+                showToast("Помилка оновлення статусу");
             }
-            const toastContainer = document.getElementById('notification-container') || document.body;
+        };
+
+        window.showToast = (msg) => {
+            let container = document.getElementById('toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toast-container';
+                container.style.position = 'fixed';
+                container.style.bottom = '20px';
+                container.style.left = '50%';
+                container.style.transform = 'translateX(-50%)';
+                container.style.zIndex = '9999';
+                container.style.display = 'flex';
+                container.style.flexDirection = 'column';
+                container.style.gap = '8px';
+                document.body.appendChild(container);
+            }
             const t = document.createElement('div'); 
             t.className = 'toast'; 
             t.innerText = msg;
-            t.style.background = 'white';
+            t.style.background = 'rgba(15,23,42,0.95)';
+            t.style.color = 'white';
             t.style.padding = '10px 20px';
             t.style.borderRadius = '10px';
-            t.style.marginTop = '5px';
-            t.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
-            toastContainer.appendChild(t); 
+            t.style.fontSize = '0.85rem';
+            t.style.borderLeft = `3px solid #2ecc71`;
+            t.style.backdropFilter = 'blur(10px)';
+            container.appendChild(t); 
             setTimeout(() => t.remove(), 3000);
         };
 
@@ -454,6 +478,7 @@
                     const contactComment = d.contactComment ? d.contactComment : '—';
                     
                     const hasAfterPhoto = d.afterPhoto && d.afterPhoto !== '';
+                    const isCompleted = d.manuallyCompleted === true;
                     
                     list.innerHTML += `
                         <tr>
@@ -469,8 +494,7 @@
                                 <div class="before-after-container">
                                     ${hasAfterPhoto ? 
                                         `<img src="${d.afterPhoto}" class="after-photo-preview" onclick="openFullImage('${d.afterPhoto}')">
-                                         <button class="delete-after-btn" onclick="deleteAfterPhoto('${d.id}')">🗑️</button>
-                                         <span class="after-badge">✅ Виконано</span>` 
+                                         <button class="delete-after-btn" onclick="deleteAfterPhoto('${d.id}')">🗑️</button>` 
                                         : 
                                         `<div>
                                             <input type="file" id="afterFile_${d.id}" accept="image/*" style="display:none" onchange="uploadAfterPhoto('${d.id}', this)">
@@ -479,7 +503,12 @@
                                     }
                                 </div>
                             </td>
-                            <td data-label="Дія">
+                            <td data-label="Виконано">
+                                <input type="checkbox" class="completed-checkbox" 
+                                    ${isCompleted ? 'checked' : ''} 
+                                    onchange="toggleCompleted('${d.id}', this.checked)">
+                            </td>
+                            <td data-label="Керування">
                                 <button class="btn-delete" onclick="deletePit('${d.id}')">Видалити</button>
                             </td>
                         </tr>`;
