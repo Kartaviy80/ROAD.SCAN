@@ -12,7 +12,10 @@
         :root {
             --bg-color: #f4f7f9;
             --glass-bg: rgba(255, 255, 255, 0.9);
-            --accent-red: #ff004c;
+            /* Оновлені скляні червоні відтінки */
+            --glass-red-fill: rgba(255, 50, 50, 0.6);   /* Напівпрозора заливка (як у синього) */
+            --glass-red-border: rgba(255, 100, 100, 0.8); /* М'яка червона обводка */
+            --accent-crit: #ff004c;
             --accent-green: #2ecc71;
             --text-main: #2c3e50;
         }
@@ -29,7 +32,7 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.08); border: 1px solid rgba(255,255,255,0.5);
         }
 
-        .logo { font-family: 'Orbitron', sans-serif; font-size: 1.4rem; color: var(--accent-red); font-weight: 700; letter-spacing: 2px; }
+        .logo { font-family: 'Orbitron', sans-serif; font-size: 1.4rem; color: #ff3232; font-weight: 700; letter-spacing: 2px; }
 
         #map { height: 100vh; width: 100%; background: #e5e5e5; }
 
@@ -39,7 +42,7 @@
         }
 
         .toast {
-            background: white; border-left: 4px solid var(--accent-red);
+            background: white; border-left: 4px solid #ff3232;
             padding: 12px 25px; border-radius: 12px; font-size: 0.9rem;
             animation: slideUp 0.4s ease-out forwards; box-shadow: 0 8px 20px rgba(0,0,0,0.1);
         }
@@ -48,18 +51,18 @@
 
         .controls { position: fixed; bottom: 30px; right: 30px; z-index: 1000; }
         .btn-main {
-            background: var(--accent-red); border: none; color: white;
+            background: #ff3232; border: none; color: white;
             padding: 18px 30px; border-radius: 50px; cursor: pointer;
             font-family: 'Orbitron', sans-serif; font-size: 0.8rem; transition: 0.3s;
-            box-shadow: 0 8px 25px rgba(255, 0, 76, 0.3); text-transform: uppercase;
+            box-shadow: 0 8px 25px rgba(255, 50, 50, 0.3); text-transform: uppercase;
         }
 
         .pit-card { text-align: center; min-width: 220px; padding: 5px; }
         .pit-card img { width: 100%; border-radius: 10px; margin-top: 10px; max-height: 150px; object-fit: cover; background: #eee; }
         
         .vote-btn {
-            width: 100%; background: white; border: 1px solid var(--accent-red);
-            color: var(--accent-red); padding: 10px; margin-top: 8px;
+            width: 100%; background: white; border: 1px solid #ff3232;
+            color: #ff3232; padding: 10px; margin-top: 8px;
             border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.3s;
         }
         .vote-btn.photo-success {
@@ -68,8 +71,15 @@
             border-color: var(--accent-green) !important;
         }
 
-        @keyframes pulse-red { 0% { r: 8; stroke-opacity: 0.8; } 100% { r: 20; stroke-opacity: 0; } }
-        .critical-pit { animation: pulse-red 1.2s infinite; }
+        @keyframes pulse-red-glass { 
+            0% { stroke-width: 2; stroke-opacity: 0.8; } 
+            100% { stroke-width: 15; stroke-opacity: 0; } 
+        }
+        /* Глянцевий ефект для критичних ям */
+        .critical-pit { 
+            animation: pulse-red-glass 1.5s infinite; 
+            filter: drop-shadow(0 0 5px rgba(255, 50, 50, 0.8));
+        }
         .adding-mode { cursor: crosshair !important; }
     </style>
 </head>
@@ -110,10 +120,10 @@
             attribution: '&copy; OpenStreetMap'
         }).addTo(map);
 
-        // Геолокація користувача
+        // Геолокація користувача (залишаємо синьою, щоб не плутати з ямами)
         map.locate({setView: true, maxZoom: 16});
         map.on('locationfound', (e) => {
-            L.circleMarker(e.latlng, { radius: 8, fillColor: "#0088ff", color: "#fff", weight: 3, fillOpacity: 1 }).addTo(map).bindPopup("Ви тут");
+            L.circleMarker(e.latlng, { radius: 8, fillColor: "#0088ff", color: "#fff", weight: 3, fillOpacity: 1, filter: "drop-shadow(0 0 3px #0088ff)" }).addTo(map).bindPopup("Ви тут");
             L.circle(e.latlng, e.accuracy / 2, { color: "#0088ff", fillColor: "#0088ff", fillOpacity: 0.1, weight: 1 }).addTo(map);
         });
         map.on('locationerror', (e) => showToast("Геолокація недоступна"));
@@ -128,7 +138,7 @@
             const isAdd = document.body.classList.toggle('adding-mode');
             const btn = document.getElementById('addBtn');
             btn.innerText = isAdd ? "Скасувати" : "+ Повідомити про яму";
-            btn.style.background = isAdd ? "#e74c3c" : "#ff004c";
+            btn.style.background = isAdd ? "#e74c3c" : "#ff3232";
             if(isAdd) showToast("Оберіть місце ями на карті");
         };
 
@@ -172,7 +182,7 @@
                     <h4>НОВА ЯМА</h4>
                     <input type="file" id="fileInp" accept="image/*" style="display:none" onchange="handlePhotoSelect(this, 'photoBtnNew')">
                     <button class="vote-btn" id="photoBtnNew" onclick="document.getElementById('fileInp').click()">📷 Додати фото (опційно)</button>
-                    <button class="vote-btn" style="background:#ff004c; color:white; border-color:#ff004c;" onclick="processAndSave(${lat}, ${lng})">Створити мітку</button>
+                    <button class="vote-btn" style="background:#ff3232; color:white; border-color:#ff3232;" onclick="processAndSave(${lat}, ${lng})">Створити мітку</button>
                 </div>
             `;
             L.popup().setLatLng(e.latlng).setContent(popupCont).openOn(map);
@@ -240,23 +250,26 @@
                     if (activeMarkers[id]) map.removeLayer(activeMarkers[id]);
 
                     const isCrit = data.votes >= 15;
+                    
+                    // Налаштування "скляного" червоного маркера
                     const marker = L.circleMarker([data.lat, data.lng], {
                         radius: 7 + (data.votes / 2),
-                        fillColor: '#ff0000', 
-                        color: '#fff', 
+                        // Стилізація під скло
+                        fillColor: 'rgba(255, 50, 50, 0.6)', // Напівпрозора червона заливка
+                        color: 'rgba(255, 100, 100, 0.8)',   /* Червона м'яка обводка замість білої */
                         weight: 2, 
-                        fillOpacity: 0.8,
+                        fillOpacity: 1, // fillOpacity регулюється самим fillColor (rgba)
                         className: isCrit ? 'critical-pit' : ''
                     }).addTo(map);
 
                     marker.bindPopup(`
                         <div class="pit-card">
                             <img src="${data.photo}">
-                            <h4 style="color:#ff0000">${isCrit ? 'КРИТИЧНА ЯМА' : 'ПОШКОДЖЕННЯ'}</h4>
+                            <h4 style="color:#ff3232">${isCrit ? 'КРИТИЧНА ЯМА' : 'ПОШКОДЖЕННЯ'}</h4>
                             <p>Підтверджень: ${data.votes}</p>
                             <input type="file" id="updatePhoto_${id}" accept="image/*" style="display:none" onchange="handlePhotoSelect(this, 'photoBtn_${id}')">
                             <button class="vote-btn" id="photoBtn_${id}" onclick="document.getElementById('updatePhoto_${id}').click()">📷 Змінити фото</button>
-                            <button class="vote-btn" style="background:#ff0000; color:white; border-color:#ff0000;" onclick="voteForPit('${id}')">ПІДТВЕРДИТИ</button>
+                            <button class="vote-btn" style="background:#ff3232; color:white; border-color:#ff3232;" onclick="voteForPit('${id}')">ПІДТВЕРДИТИ</button>
                         </div>
                     `);
                     activeMarkers[id] = marker;
