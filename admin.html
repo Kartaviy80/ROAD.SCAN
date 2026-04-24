@@ -20,7 +20,6 @@
 
         .container { max-width: 1300px; margin: 0 auto; padding: 20px; }
 
-        /* Логін */
         #login-screen { display: flex; align-items: center; justify-content: center; min-height: 90vh; }
         .login-box { 
             background: var(--card-bg); backdrop-filter: blur(10px); padding: 40px; 
@@ -33,14 +32,12 @@
         }
         .btn-google:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(255,255,255,0.2); }
 
-        /* Контент */
         #admin-content { display: none; animation: fadeIn 0.5s ease; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
         .header-panel { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding: 15px; background: var(--card-bg); border-radius: 15px; }
         h1 { font-family: 'Orbitron', sans-serif; color: var(--accent); font-size: 1.5rem; text-transform: uppercase; letter-spacing: 2px; }
 
-        /* Таблиця */
         .table-wrapper { background: var(--card-bg); border-radius: 20px; overflow-x: auto; border: 1px solid rgba(255,255,255,0.05); }
         table { width: 100%; border-collapse: collapse; text-align: left; min-width: 1200px; }
         th { background: rgba(255,255,255,0.03); padding: 20px; color: #64748b; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }
@@ -110,7 +107,6 @@
         .contact-phone { color: #2ecc71; font-weight: 600; }
         .contact-comment { color: #94a3b8; max-width: 200px; word-break: break-word; }
 
-        /* Модальне вікно для фото */
         .image-modal {
             display: none;
             position: fixed;
@@ -146,7 +142,6 @@
             transform: scale(1.2);
         }
 
-        /* Модальне вікно порівняння */
         .compare-modal {
             display: none;
             position: fixed;
@@ -193,6 +188,17 @@
             font-size: 50px;
             cursor: pointer;
         }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
         @media (max-width: 850px) {
             .table-wrapper { overflow-x: scroll; }
@@ -246,13 +252,11 @@
         </div>
     </div>
 
-    <!-- Модальне вікно для перегляду фото -->
     <div id="imageModal" class="image-modal" onclick="closeImageModal()">
         <span class="close-modal" onclick="closeImageModal()">&times;</span>
         <img id="modalImage" src="" alt="Збільшене фото">
     </div>
 
-    <!-- Модальне вікно порівняння до/після -->
     <div id="compareModal" class="compare-modal">
         <span class="close-compare" onclick="closeCompareModal()">&times;</span>
         <div class="compare-container">
@@ -269,8 +273,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, deleteDoc, doc, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getStorage, ref, uploadString, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+        import { getFirestore, collection, onSnapshot, deleteDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         const firebaseConfig = {
@@ -284,11 +287,33 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const storage = getStorage(app);
         const auth = getAuth(app);
         const provider = new GoogleAuthProvider();
 
         const allowedEmails = ["andrey2003kornev@gmail.com"];
+
+        // Функція оптимізації фото (зменшення розміру)
+        const processImage = (file) => {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let width = img.width;
+                        let height = img.height;
+                        const MAX = 800;
+                        if (width > MAX) { height *= MAX / width; width = MAX; }
+                        canvas.width = width; canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.7));
+                    };
+                };
+            });
+        };
 
         window.openFullImage = (imageUrl) => {
             const modal = document.getElementById('imageModal');
@@ -314,63 +339,80 @@
             document.getElementById('compareModal').style.display = 'none';
         };
 
-        // Функція для завантаження фото "після"
+        // Завантаження фото "після" як base64 в Firestore
         window.uploadAfterPhoto = async (pitId, fileInput) => {
             const file = fileInput.files[0];
             if (!file) return;
 
             if (!confirm('Завантажити фото виконаних робіт?')) return;
 
+            const btn = document.getElementById(`uploadBtn_${pitId}`);
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="loading-spinner"></span> Завантаження...';
+            btn.disabled = true;
+
             try {
-                // Конвертуємо фото в base64
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = async () => {
-                    const base64Image = reader.result;
-                    
-                    // Зберігаємо в Storage
-                    const storageRef = ref(storage, `after_photos/${pitId}`);
-                    await uploadString(storageRef, base64Image, 'data_url');
-                    const downloadUrl = await getDownloadURL(storageRef);
-                    
-                    // Оновлюємо в Firestore
-                    const pitRef = doc(db, "potholes", pitId);
-                    await updateDoc(pitRef, {
-                        afterPhoto: downloadUrl,
-                        repaired: true
-                    });
-                    
-                    alert('Фото успішно завантажено!');
-                    fileInput.value = '';
-                };
+                showToast("Оптимізація фото...");
+                const base64Image = await processImage(file);
+                
+                showToast("Збереження в базу...");
+                const pitRef = doc(db, "potholes", pitId);
+                await updateDoc(pitRef, {
+                    afterPhoto: base64Image,
+                    repaired: true
+                });
+                
+                showToast("Фото успішно завантажено!");
+                fileInput.value = '';
             } catch (error) {
                 console.error('Помилка завантаження:', error);
-                alert('Помилка завантаження фото');
+                showToast("Помилка завантаження фото");
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
             }
         };
 
-        // Функція для видалення фото "після"
-            // Функція для видалення фото "після"
+        // Видалення фото "після"
         window.deleteAfterPhoto = async (pitId) => {
             if (!confirm('Видалити фото виконаних робіт?')) return;
             
             try {
-                // Видаляємо з Storage
-                const storageRef = ref(storage, `after_photos/${pitId}`);
-                await deleteObject(storageRef).catch(() => {}); // Ігноруємо помилку, якщо файлу немає
-                
-                // Оновлюємо в Firestore
                 const pitRef = doc(db, "potholes", pitId);
                 await updateDoc(pitRef, {
                     afterPhoto: null,
                     repaired: false
                 });
-                
-                alert('Фото видалено');
+                showToast("Фото видалено");
             } catch (error) {
                 console.error('Помилка видалення:', error);
-                alert('Помилка видалення фото');
+                showToast("Помилка видалення фото");
             }
+        };
+
+        window.showToast = (msg) => {
+            const container = document.getElementById('notification-container');
+            if (!container) {
+                const div = document.createElement('div');
+                div.id = 'notification-container';
+                div.style.position = 'fixed';
+                div.style.bottom = '20px';
+                div.style.left = '50%';
+                div.style.transform = 'translateX(-50%)';
+                div.style.zIndex = '9999';
+                document.body.appendChild(div);
+            }
+            const toastContainer = document.getElementById('notification-container') || document.body;
+            const t = document.createElement('div'); 
+            t.className = 'toast'; 
+            t.innerText = msg;
+            t.style.background = 'white';
+            t.style.padding = '10px 20px';
+            t.style.borderRadius = '10px';
+            t.style.marginTop = '5px';
+            t.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+            toastContainer.appendChild(t); 
+            setTimeout(() => t.remove(), 3000);
         };
 
         window.login = () => signInWithPopup(auth, provider).catch(err => console.error(err));
@@ -430,8 +472,10 @@
                                          <button class="delete-after-btn" onclick="deleteAfterPhoto('${d.id}')">🗑️</button>
                                          <span class="after-badge">✅ Виконано</span>` 
                                         : 
-                                        `<input type="file" id="afterFile_${d.id}" accept="image/*" style="display:none" onchange="uploadAfterPhoto('${d.id}', this)">
-                                         <button class="upload-btn" onclick="document.getElementById('afterFile_${d.id}').click()">📤 Завантажити фото</button>`
+                                        `<div>
+                                            <input type="file" id="afterFile_${d.id}" accept="image/*" style="display:none" onchange="uploadAfterPhoto('${d.id}', this)">
+                                            <button class="upload-btn" id="uploadBtn_${d.id}" onclick="document.getElementById('afterFile_${d.id}').click()">📤 Завантажити фото</button>
+                                         </div>`
                                     }
                                 </div>
                             </td>
@@ -446,9 +490,6 @@
         window.deletePit = async (id) => {
             if(confirm('Видалити мітку з карти Дніпра?')) {
                 try { 
-                    // Видаляємо фото з Storage якщо є
-                    const afterRef = ref(storage, `after_photos/${id}`);
-                    await deleteObject(afterRef).catch(() => {});
                     await deleteDoc(doc(db, "potholes", id)); 
                 } catch(e) { 
                     alert("Помилка видалення. Перевірте консоль."); 
