@@ -12,8 +12,6 @@
         :root {
             --bg-color: #f4f7f9;
             --glass-bg: rgba(255, 255, 255, 0.9);
-            --accent-cyan: #0088ff;
-            --accent-orange: #ff6a00;
             --accent-red: #ff004c;
             --accent-green: #2ecc71;
             --text-main: #2c3e50;
@@ -31,7 +29,7 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.08); border: 1px solid rgba(255,255,255,0.5);
         }
 
-        .logo { font-family: 'Orbitron', sans-serif; font-size: 1.4rem; color: var(--accent-cyan); font-weight: 700; letter-spacing: 2px; }
+        .logo { font-family: 'Orbitron', sans-serif; font-size: 1.4rem; color: var(--accent-red); font-weight: 700; letter-spacing: 2px; }
 
         #map { height: 100vh; width: 100%; background: #e5e5e5; }
 
@@ -41,7 +39,7 @@
         }
 
         .toast {
-            background: white; border-left: 4px solid var(--accent-cyan);
+            background: white; border-left: 4px solid var(--accent-red);
             padding: 12px 25px; border-radius: 12px; font-size: 0.9rem;
             animation: slideUp 0.4s ease-out forwards; box-shadow: 0 8px 20px rgba(0,0,0,0.1);
         }
@@ -50,18 +48,18 @@
 
         .controls { position: fixed; bottom: 30px; right: 30px; z-index: 1000; }
         .btn-main {
-            background: var(--accent-cyan); border: none; color: white;
+            background: var(--accent-red); border: none; color: white;
             padding: 18px 30px; border-radius: 50px; cursor: pointer;
             font-family: 'Orbitron', sans-serif; font-size: 0.8rem; transition: 0.3s;
-            box-shadow: 0 8px 25px rgba(0, 136, 255, 0.3); text-transform: uppercase;
+            box-shadow: 0 8px 25px rgba(255, 0, 76, 0.3); text-transform: uppercase;
         }
 
         .pit-card { text-align: center; min-width: 220px; padding: 5px; }
         .pit-card img { width: 100%; border-radius: 10px; margin-top: 10px; max-height: 150px; object-fit: cover; background: #eee; }
         
         .vote-btn {
-            width: 100%; background: white; border: 1px solid var(--accent-cyan);
-            color: var(--accent-cyan); padding: 10px; margin-top: 8px;
+            width: 100%; background: white; border: 1px solid var(--accent-red);
+            color: var(--accent-red); padding: 10px; margin-top: 8px;
             border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.3s;
         }
         .vote-btn.photo-success {
@@ -112,6 +110,14 @@
             attribution: '&copy; OpenStreetMap'
         }).addTo(map);
 
+        // Геолокація користувача
+        map.locate({setView: true, maxZoom: 16});
+        map.on('locationfound', (e) => {
+            L.circleMarker(e.latlng, { radius: 8, fillColor: "#0088ff", color: "#fff", weight: 3, fillOpacity: 1 }).addTo(map).bindPopup("Ви тут");
+            L.circle(e.latlng, e.accuracy / 2, { color: "#0088ff", fillColor: "#0088ff", fillOpacity: 0.1, weight: 1 }).addTo(map);
+        });
+        map.on('locationerror', (e) => showToast("Геолокація недоступна"));
+
         window.showToast = (msg) => {
             const container = document.getElementById('notification-container');
             const t = document.createElement('div'); t.className = 'toast'; t.innerText = msg;
@@ -122,7 +128,7 @@
             const isAdd = document.body.classList.toggle('adding-mode');
             const btn = document.getElementById('addBtn');
             btn.innerText = isAdd ? "Скасувати" : "+ Повідомити про яму";
-            btn.style.background = isAdd ? "#e74c3c" : "#0088ff";
+            btn.style.background = isAdd ? "#e74c3c" : "#ff004c";
             if(isAdd) showToast("Оберіть місце ями на карті");
         };
 
@@ -166,7 +172,7 @@
                     <h4>НОВА ЯМА</h4>
                     <input type="file" id="fileInp" accept="image/*" style="display:none" onchange="handlePhotoSelect(this, 'photoBtnNew')">
                     <button class="vote-btn" id="photoBtnNew" onclick="document.getElementById('fileInp').click()">📷 Додати фото (опційно)</button>
-                    <button class="vote-btn" style="background:#0088ff; color:white;" onclick="processAndSave(${lat}, ${lng})">Створити мітку</button>
+                    <button class="vote-btn" style="background:#ff004c; color:white; border-color:#ff004c;" onclick="processAndSave(${lat}, ${lng})">Створити мітку</button>
                 </div>
             `;
             L.popup().setLatLng(e.latlng).setContent(popupCont).openOn(map);
@@ -190,14 +196,12 @@
                     createdAt: serverTimestamp()
                 });
 
-                // Відмічаємо в браузері, що юзер створив цю мітку (авто-голос)
                 localStorage.setItem(`voted_${docRef.id}`, "true");
-
                 showToast("Яму успішно занесено в базу!");
                 map.closePopup();
             } catch (err) {
                 console.error(err);
-                showToast("Помилка запису! Перевірте консоль.");
+                showToast("Помилка запису!");
             }
         };
 
@@ -205,7 +209,6 @@
             const fileInp = document.getElementById(`updatePhoto_${id}`);
             const file = fileInp.files[0];
             
-            // Перевірка через LocalStorage замість IP
             if (localStorage.getItem(`voted_${id}`)) {
                 return showToast("Ви вже підтримали цю мітку");
             }
@@ -213,24 +216,15 @@
             try {
                 showToast("Опрацювання...");
                 const docRef = doc(db, "potholes", id);
-                
-                let updateData = { 
-                    votes: increment(1) 
-                };
-
+                let updateData = { votes: increment(1) };
                 if (file) {
                     showToast("Оновлення фото...");
                     updateData.photo = await processImage(file);
                 }
-
                 await updateDoc(docRef, updateData);
-                
-                // Зберігаємо голос локально
                 localStorage.setItem(`voted_${id}`, "true");
-                
                 showToast(file ? "Фото оновлено!" : "Голос враховано!");
             } catch (err) {
-                console.error(err);
                 showToast("Помилка Firestore");
             }
         };
@@ -245,23 +239,24 @@
                 if (change.type === "added" || change.type === "modified") {
                     if (activeMarkers[id]) map.removeLayer(activeMarkers[id]);
 
-                    const isCrit = data.votes >= 25;
-                    const color = isCrit ? 'var(--accent-red)' : (data.votes >= 10 ? 'var(--accent-orange)' : 'var(--accent-cyan)');
-                    
+                    const isCrit = data.votes >= 15;
                     const marker = L.circleMarker([data.lat, data.lng], {
-                        radius: 7 + (data.votes / 3),
-                        fillColor: color, color: color, weight: 2, fillOpacity: 0.6,
+                        radius: 7 + (data.votes / 2),
+                        fillColor: '#ff0000', 
+                        color: '#fff', 
+                        weight: 2, 
+                        fillOpacity: 0.8,
                         className: isCrit ? 'critical-pit' : ''
                     }).addTo(map);
 
                     marker.bindPopup(`
                         <div class="pit-card">
                             <img src="${data.photo}">
-                            <h4 style="color:${color}">${isCrit ? 'КРИТИЧНА ЯМА' : 'АКТИВНА ЯМА'}</h4>
+                            <h4 style="color:#ff0000">${isCrit ? 'КРИТИЧНА ЯМА' : 'ПОШКОДЖЕННЯ'}</h4>
                             <p>Підтверджень: ${data.votes}</p>
                             <input type="file" id="updatePhoto_${id}" accept="image/*" style="display:none" onchange="handlePhotoSelect(this, 'photoBtn_${id}')">
                             <button class="vote-btn" id="photoBtn_${id}" onclick="document.getElementById('updatePhoto_${id}').click()">📷 Змінити фото</button>
-                            <button class="vote-btn" style="background:${color}; color:white;" onclick="voteForPit('${id}')">ЦЕ ПРАВДА</button>
+                            <button class="vote-btn" style="background:#ff0000; color:white; border-color:#ff0000;" onclick="voteForPit('${id}')">ПІДТВЕРДИТИ</button>
                         </div>
                     `);
                     activeMarkers[id] = marker;
