@@ -15,7 +15,7 @@
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Exo 2', sans-serif; background: var(--bg); color: white; line-height: 1.6; }
+        body { font-family: 'Exo 2', sans-serif; background: var(--bg); color: white; line-height: 1.6; overflow-x: hidden; }
 
         .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
 
@@ -45,8 +45,18 @@
         th { background: rgba(255,255,255,0.03); padding: 20px; color: #64748b; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }
         td { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.05); }
 
-        .img-preview { width: 120px; height: 80px; object-fit: cover; border-radius: 10px; cursor: pointer; transition: 0.3s; }
-        .img-preview:hover { transform: scale(1.05); }
+        .img-preview { 
+            width: 120px; 
+            height: 80px; 
+            object-fit: cover; 
+            border-radius: 10px; 
+            cursor: pointer; 
+            transition: 0.3s;
+        }
+        .img-preview:hover { 
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
 
         .btn-map { background: var(--success); color: white; padding: 8px 16px; border-radius: 8px; text-decoration: none; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px; }
         .btn-delete { background: var(--danger); color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-family: 'Exo 2'; transition: 0.2s; }
@@ -59,6 +69,44 @@
         .contact-info { font-size: 0.85rem; }
         .contact-phone { color: #2ecc71; font-weight: 600; }
         .contact-comment { color: #94a3b8; max-width: 200px; word-break: break-word; }
+
+        /* Модальне вікно для фото */
+        .image-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.95);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .image-modal img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+        }
+        .close-modal {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            color: white;
+            font-size: 50px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+            font-family: Arial, sans-serif;
+            z-index: 10001;
+        }
+        .close-modal:hover {
+            color: #ff3232;
+            transform: scale(1.2);
+        }
 
         /* Адаптивність (Мобільні) */
         @media (max-width: 850px) {
@@ -78,6 +126,7 @@
             
             .img-preview { width: 100%; height: 180px; margin-bottom: 10px; }
             .header-panel { flex-direction: column; gap: 10px; text-align: center; }
+            .close-modal { top: 10px; right: 20px; font-size: 40px; }
         }
     </style>
 </head>
@@ -112,8 +161,8 @@
                             <th>Фото</th>
                             <th>Дата подачі</th>
                             <th>Локація</th>
-                            <th>Контакт</th>      <!-- Новий стовпець -->
-                            <th>Коментар</th>      <!-- Новий стовпець -->
+                            <th>Контакт</th>
+                            <th>Коментар</th>
                             <th>Голоси</th>
                             <th>Керування</th>
                         </tr>
@@ -122,6 +171,12 @@
                 </table>
             </div>
         </div>
+    </div>
+
+    <!-- Модальне вікно для перегляду фото -->
+    <div id="imageModal" class="image-modal" onclick="closeImageModal()">
+        <span class="close-modal" onclick="closeImageModal()">&times;</span>
+        <img id="modalImage" src="" alt="Збільшене фото">
     </div>
 
     <script type="module">
@@ -144,6 +199,18 @@
         const provider = new GoogleAuthProvider();
 
         const allowedEmails = ["andrey2003kornev@gmail.com"]; // Замініть на потрібні email
+
+        // Функція для відкриття модального вікна з фото
+        window.openFullImage = (imageUrl) => {
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalImage');
+            modal.style.display = 'flex';
+            modalImg.src = imageUrl;
+        };
+
+        window.closeImageModal = () => {
+            document.getElementById('imageModal').style.display = 'none';
+        };
 
         window.login = () => signInWithPopup(auth, provider).catch(err => console.error(err));
         window.logout = () => signOut(auth);
@@ -182,17 +249,16 @@
                     
                     const mapUrl = `https://www.google.com/maps?q=${d.lat},${d.lng}`;
                     
-                    // Отримуємо контактні дані, якщо вони є
                     const contactPhone = d.contactPhone ? d.contactPhone : '—';
                     const contactComment = d.contactComment ? d.contactComment : '—';
                     
                     list.innerHTML += `
                         <tr>
-                            <td data-label="Огляд"><img src="${d.photo}" class="img-preview" onclick="window.open(this.src)"></td>
+                            <td data-label="Огляд"><img src="${d.photo}" class="img-preview" onclick="openFullImage('${d.photo}')"></td>
                             <td data-label="Додано"><span class="date-badge">${dateDisplay}</span></td>
                             <td data-label="Мапа"><a href="${mapUrl}" target="_blank" class="btn-map">📍 Google Maps</a></td>
-                            <td data-label="Контакт"><span class="contact-phone">${contactPhone}</span></td> <!-- Новий рядок -->
-                            <td data-label="Коментар"><span class="contact-comment">${contactComment}</span></td> <!-- Новий рядок -->
+                            <td data-label="Контакт"><span class="contact-phone">${contactPhone}</span></td>
+                            <td data-label="Коментар"><span class="contact-comment">${contactComment}</span></td>
                             <td data-label="Активність"><span class="votes-count">${d.votes}</span></td>
                             <td data-label="Дія"><button class="btn-delete" onclick="deletePit('${d.id}')">Видалити</button></td>
                         </table>`;
