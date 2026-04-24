@@ -143,7 +143,7 @@
             <input type="tel" id="contactPhone" placeholder="Номер телефону">
             <textarea id="contactComment" rows="3" placeholder="Коментар"></textarea>
             <button id="saveContactBtn">Зберегти</button>
-            <button id="skipContactBtn" style="background:#ccc; color:#333;">Пропустити</button>
+            <button id="closeContactBtn" style="background:#ccc; color:#333;">Закрити</button>
         </div>
     </div>
 
@@ -170,10 +170,11 @@
             attribution: '&copy; OpenStreetMap'
         }).addTo(map);
 
-        // Змінні для збереження тимчасових даних контактів
+        // Змінні для збереження тимчасових даних
         let tempContactData = { phone: '', comment: '' };
         let pendingLatLng = null;
-        let pendingPhotoFile = null; // <--- Нова змінна для збереження файлу фото
+        let pendingPhotoFile = null;
+        let currentPopup = null;
 
         map.locate({setView: true, maxZoom: 16});
         map.on('locationfound', (e) => {
@@ -224,49 +225,30 @@
                 btn.innerText = "✅ Фото додано";
                 btn.classList.add('photo-success');
                 if (navigator.vibrate) navigator.vibrate(50);
-                
-                // [НОВЕ] Зберігаємо файл фото для подальшого використання
                 pendingPhotoFile = input.files[0];
             }
         };
         
-        // [НОВЕ] Функція для показу модалки з контактами
-        window.showContactModal = (lat, lng) => {
-            pendingLatLng = { lat, lng };
-            // Очищуємо поля модалки
+        // Функція для показу модалки з контактами
+        window.showContactModal = () => {
             document.getElementById('contactPhone').value = tempContactData.phone;
             document.getElementById('contactComment').value = tempContactData.comment;
             document.getElementById('contactModal').style.display = 'flex';
         };
         
-        // [НОВЕ] Збереження контактів та створення ями
-        window.saveContactsAndProceed = async () => {
+        // Збереження контактів (без створення ями)
+        window.saveContactsOnly = () => {
             const phone = document.getElementById('contactPhone').value;
             const comment = document.getElementById('contactComment').value;
-            
-            // Зберігаємо в локальне сховище, щоб поля не скидались
             tempContactData = { phone, comment };
-            
             document.getElementById('contactModal').style.display = 'none';
-            
-            if (pendingLatLng) {
-                await processAndSave(pendingLatLng.lat, pendingLatLng.lng, phone, comment);
-                pendingLatLng = null;
-            }
+            showToast("Контактні дані збережено");
         };
         
-        // [НОВЕ] Пропуск додавання контактів
-        window.skipContacts = () => {
-            document.getElementById('contactModal').style.display = 'none';
-            if (pendingLatLng) {
-                processAndSave(pendingLatLng.lat, pendingLatLng.lng, '', '');
-                pendingLatLng = null;
-            }
-        };
-
-        // [Оновлено] Додано параметри contactPhone, contactComment
-        window.processAndSave = async (lat, lng, contactPhone = '', contactComment = '') => {
-            // Використовуємо збережений файл фото, якщо він є
+        // Створення ями зі збереженими контактами
+        window.createPit = async () => {
+            if (!pendingLatLng) return;
+            
             const file = pendingPhotoFile;
             let photoData = "https://via.placeholder.com/300x150?text=Немає+фото";
 
@@ -274,28 +256,30 @@
                 if (file) {
                     showToast("Оптимізація фото...");
                     photoData = await processImage(file);
-                    // Скидаємо збережений файл після використання
-                    pendingPhotoFile = null;
                 }
 
                 const docData = {
-                    lat, lng,
+                    lat: pendingLatLng.lat,
+                    lng: pendingLatLng.lng,
                     photo: photoData,
                     votes: 1,
                     createdAt: serverTimestamp()
                 };
                 
-                // Додаємо контактні дані, якщо вони не порожні
-                if (contactPhone.trim()) docData.contactPhone = contactPhone.trim();
-                if (contactComment.trim()) docData.contactComment = contactComment.trim();
+                if (tempContactData.phone.trim()) docData.contactPhone = tempContactData.phone.trim();
+                if (tempContactData.comment.trim()) docData.contactComment = tempContactData.comment.trim();
 
                 const docRef = await addDoc(collection(db, "potholes"), docData);
-
                 localStorage.setItem(`voted_${docRef.id}`, "true");
                 showToast("Яму успішно занесено в базу!");
-                map.closePopup();
                 
-                // Очищуємо інпут файлу, якщо він існує
+                if (currentPopup) map.closePopup();
+                
+                // Скидаємо всі тимчасові дані
+                pendingLatLng = null;
+                pendingPhotoFile = null;
+                tempContactData = { phone: '', comment: '' };
+                
                 const fileInput = document.getElementById('fileInp');
                 if(fileInput) fileInput.value = '';
                 
@@ -305,12 +289,11 @@
             }
         };
 
-        // [Оновлено] Додано кнопку для контактів у попап
+        // Оновлений клік по карті
         map.on('click', async (e) => {
             if (!document.body.classList.contains('adding-mode')) return;
-            const { lat, lng } = e.latlng;
             
-            // Скидаємо попередній файл фото перед новим створенням
+            pendingLatLng = e.latlng;
             pendingPhotoFile = null;
             
             const popupCont = `
@@ -318,11 +301,11 @@
                     <h4>НОВА ЯМА</h4>
                     <input type="file" id="fileInp" accept="image/*" style="display:none" onchange="handlePhotoSelect(this, 'photoBtnNew')">
                     <button class="vote-btn" id="photoBtnNew" onclick="document.getElementById('fileInp').click()">📷 Додати фото (опційно)</button>
-                    <button class="vote-btn" style="background:#2ecc71; border-color:#2ecc71; color:white;" onclick="showContactModal(${lat}, ${lng})">📞 Додати контакти (за бажанням)</button>
-                    <button class="vote-btn" style="background:#ff3232; color:white; border-color:#ff3232;" onclick="skipContacts()">Створити мітку</button>
+                    <button class="vote-btn" style="background:#2ecc71; border-color:#2ecc71; color:white;" onclick="showContactModal()">📞 Додати контакти (за бажанням)</button>
+                    <button class="vote-btn" style="background:#ff3232; color:white; border-color:#ff3232;" onclick="createPit()">✅ Створити мітку</button>
                 </div>
             `;
-            L.popup().setLatLng(e.latlng).setContent(popupCont).openOn(map);
+            currentPopup = L.popup().setLatLng(e.latlng).setContent(popupCont).openOn(map);
             toggleAddMode();
         });
 
@@ -387,13 +370,14 @@
         });
         
         // Ініціалізація обробників модального вікна
-        document.getElementById('saveContactBtn').onclick = saveContactsAndProceed;
-        document.getElementById('skipContactBtn').onclick = skipContacts;
+        document.getElementById('saveContactBtn').onclick = saveContactsOnly;
+        document.getElementById('closeContactBtn').onclick = () => {
+            document.getElementById('contactModal').style.display = 'none';
+        };
         window.onclick = function(event) {
             const modal = document.getElementById('contactModal');
             if (event.target === modal) {
                 modal.style.display = 'none';
-                if(pendingLatLng) skipContacts();
             }
         }
     </script>
