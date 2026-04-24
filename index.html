@@ -171,10 +171,10 @@
             color: var(--accent-blue); padding: 10px; margin-top: 8px;
             border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.3s;
         }
-        .vote-btn.photo-success {
-            background: var(--accent-green) !important;
-            color: white !important;
-            border-color: var(--accent-green) !important;
+        .vote-btn.danger-btn {
+            background: #ff3232;
+            border-color: #ff3232;
+            color: white;
         }
 
         .adding-mode { cursor: crosshair !important; }
@@ -398,9 +398,6 @@
         });
 
         window.voteForPit = async (id) => {
-            const fileInp = document.getElementById(`updatePhoto_${id}`);
-            const file = fileInp.files[0];
-            
             if (localStorage.getItem(`voted_${id}`)) {
                 return showToast("Ви вже підтримали цю мітку");
             }
@@ -408,15 +405,11 @@
             try {
                 showToast("Опрацювання...");
                 const docRef = doc(db, "potholes", id);
-                let updateData = { votes: increment(1) };
-                if (file) {
-                    showToast("Оновлення фото...");
-                    updateData.photo = await processImage(file);
-                }
-                await updateDoc(docRef, updateData);
+                await updateDoc(docRef, { votes: increment(1) });
                 localStorage.setItem(`voted_${id}`, "true");
-                showToast(file ? "Фото оновлено!" : "Голос враховано!");
+                showToast("Голос враховано!");
             } catch (err) {
+                console.error(err);
                 showToast("Помилка Firestore");
             }
         };
@@ -435,7 +428,6 @@
                     const isRepaired = data.repaired === true && data.afterPhoto;
                     
                     // Колір маркера: червоний для активних ям, зелений для відремонтованих
-                    const markerColor = isRepaired ? '#2ecc71' : '#ff3232';
                     const markerFill = isRepaired ? 'rgba(46, 204, 113, 0.6)' : 'rgba(255, 50, 50, 0.6)';
                     const markerBorder = isRepaired ? 'rgba(46, 204, 113, 0.8)' : 'rgba(255, 100, 100, 0.8)';
                     
@@ -462,9 +454,7 @@
                             <img src="${data.photo}">
                             <h4 style="color:#ff3232">${isCrit ? 'КРИТИЧНА ЯМА' : 'ПОШКОДЖЕННЯ'}</h4>
                             <p>Підтверджень: ${data.votes}</p>
-                            <input type="file" id="updatePhoto_${id}" accept="image/*" style="display:none" onchange="handlePhotoSelect(this, 'photoBtn_${id}')">
-                            <button class="vote-btn" id="photoBtn_${id}" onclick="document.getElementById('updatePhoto_${id}').click()">📷 Змінити фото</button>
-                            <button class="vote-btn" style="background:#ff3232; color:white; border-color:#ff3232;" onclick="voteForPit('${id}')">ПІДТВЕРДИТИ</button>
+                            <button class="vote-btn danger-btn" onclick="voteForPit('${id}')">➕ ПІДТВЕРДИТИ</button>
                         </div>
                     `;
                     
